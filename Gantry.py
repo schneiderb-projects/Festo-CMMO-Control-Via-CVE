@@ -1,28 +1,24 @@
+import threading
+from multiprocessing.dummy import Pool as ThreadPool
+
 from CMMO import CMMO
 
 '''
     Gantry.py is the top level interface for controlling many CMMO's.
    
-    This library is a simple API for control multiple horizontal and vertical axes. 
-    
-    
+    This library is a simple API for controlling axes. 
 '''
 
 class Gantry:
-    def __init__(self, horizontal_ip_addresses, vertical_ip_addresses):
+    def __init__(self, CMMO_ip_addresses):
         """
         Initialize Gantry
 
-        :param horizontal_ip_addresses: List of IP Address of the CMMO's controlling the horizontal axis, use an empty list if no horizontal axes are used
-        :param vertical_ip_addresses: List of IP Address of the CMMO's controlling the vertical axis, use an empty list if no vertical axes are used
+        :param CMMO_ip_addresses: List of IP Address of the CMMO's
         """
-        self.listOfCMMOHorizontal = []
-        for ip in horizontal_ip_addresses:
-            self.listOfCMMOHorizontal.append(CMMO(ip))
-
-        self.listOfCMMOVertical = []
-        for ip in vertical_ip_addresses:
-            self.listOfCMMOVertical.append(CMMO(ip))
+        self.allMotors = []
+        for ip in CMMO_ip_addresses:
+            self.allMotors.append(CMMO(ip))
 
     def enable(self, verbose=False, veryVerbose=False):
         """
@@ -31,14 +27,8 @@ class Gantry:
         :param verbose: print high level debugging information to the console
         :param veryVerbose: print low level debugging information to the console, useful for understanding CVE
         """
-        for cmmo in self.listOfCMMOVertical:
-            s = cmmo.enableControl(verbose=verbose, veryVerbose=veryVerbose)
-            if s["ACK message"] != "Everything Ok":
-                raise RuntimeError("Failed to Enable Control of Device at IP Address "
-                                   + cmmo.ip_address + ": ERROR MESSAGE = " + str(s["ACK message"]))
-            print("CMMO at", cmmo.ip_address, "enabled")
 
-        for cmmo in self.listOfCMMOHorizontal:
+        for cmmo in self.allMotors:
             s = cmmo.enableControl(verbose=verbose, veryVerbose=veryVerbose)
             if s["ACK message"] != "Everything Ok":
                 raise RuntimeError("Failed to Enable Control of Device at IP Address "
@@ -54,20 +44,21 @@ class Gantry:
         :param verbose: print high level debugging information to the console
         :param veryVerbose: print low level debugging information to the console, useful for understanding CVE
         """
-        for cmmo in self.listOfCMMOVertical:
+
+        def home_thread(cmmo):
             s = cmmo.home(verbose=verbose, veryVerbose=veryVerbose)
             if s["ACK message"] != "Everything Ok":
                 raise RuntimeError("Failed to Enable Control of Device at IP Address "
                                    + cmmo.ip_address + ": ERROR MESSAGE = " + str(s["ACK message"]))
 
-        for cmmo in self.listOfCMMOHorizontal:
-            s = cmmo.home(verbose=verbose, veryVerbose=veryVerbose)
-            if s["ACK message"] != "Everything Ok":
-                raise RuntimeError("Failed to Enable Control of Device at IP Address "
-                                   + cmmo.ip_address + ": ERROR MESSAGE = " + str(s["ACK message"]))
+        if len(self.allMotors) > 0:
+            pool = ThreadPool(len(self.allMotors))
+            pool.map(home_thread, self.allMotors)
+
+            pool.close()
+            pool.join()
 
         self.setPositionMode(verbose=verbose, veryVerbose=veryVerbose)
-
 
     def setPositionMode(self, verbose=False, veryVerbose=False):
         """
@@ -76,43 +67,42 @@ class Gantry:
         :param verbose: print high level debugging information to the console
         :param veryVerbose: print low level debugging information to the console, useful for understanding CVE
         """
-        for cmmo in self.listOfCMMOHorizontal:
+        for cmmo in self.allMotors:
             cmmo.setPositioningMode(verbose=verbose, veryVerbose=veryVerbose)
 
-        for cmmo in self.listOfCMMOVertical:
-            cmmo.setPositioningMode(verbose=verbose, veryVerbose=veryVerbose)
-
-    def moveTo(self, horizontal_locations, vertical_locations,verbose=False, veryVerbose=False ):
+    def moveTo(self, locations, verbose=False, veryVerbose=False):
         """
-        Moves the motors to given coordinates. Vertical motors will always move first.
+        Moves the motors to given coordinates.
 
-        :param horizontal_locations: list of locations corresponding to the given list of horizontal axes.
-        :param vertical_locations: list of locations corresponding to the given list of vertical axes.
+        :param locations: list of locations corresponding to the given list of motors.
         :param verbose: print high level debugging information to the console
         :param veryVerbose: print low level debugging information to the console, useful for understanding CVE
         """
-        for i, l in enumerate(vertical_locations):
+        def move_thread(arg):
+            cmmo = arg[0]
+            l = arg[1]
             if l == -1:
-                continue
-            s = self.listOfCMMOVertical[i].moveTo(l, verbose=verbose, veryVerbose=veryVerbose)
+                return
+            s = cmmo.moveTo(l, verbose=verbose, veryVerbose=veryVerbose)
             if s["ACK message"] != "Everything Ok":
                 raise RuntimeError("Failed to Enable Control of Device at IP Address "
-                                   + self.vertical_locations[i].ip_address + ": ERROR MESSAGE = " + str(s["ACK message"]))
+                                   + self.vertical_locations[i].ip_address + ": ERROR MESSAGE = " + str(
+                    s["ACK message"]))
 
-        for i, l in enumerate(horizontal_locations):
-            if l == -1:
-                continue
-            s = self.listOfCMMOHorizontal[i].moveTo(l, verbose=verbose, veryVerbose=veryVerbose)
-            if s["ACK message"] != "Everything Ok":
-                raise RuntimeError("Failed to Enable Control of Device at IP Address "
-                                   + self.horizontal_locations[i].ip_address + ": ERROR MESSAGE = " + str(s["ACK message"]))
+        if len(self.allMotors) > 0 and len(locations) > 0:
+            megaArray = []
+            for i, l in enumerate(locations):
+                megaArray.append([self.allMotors[i], l])
+            pool = ThreadPool(len(megaArray))
+            pool.map(move_thread, megaArray)
+
+            pool.close()
+            pool.join()
+
 
     def disconnect(self):
         """
         disconnect from all CMMOs
         """
-        for cmmo in self.listOfCMMOVertical:
-            cmmo.finish()
-
-        for cmmo in self.listOfCMMOHorizontal:
+        for cmmo in self.allMotors:
             cmmo.finish()
