@@ -2,7 +2,7 @@
 
 This is a library providing an easy API to communicate with and control a Festo CMMO via Python. To see the library in action, see Example.py.
 
-Files:
+Files Descriptions:
 
     Gantry.py: Top level API to be used to control any number of Festo CMMO's with both Vertical and Horizontal Axes.
   
