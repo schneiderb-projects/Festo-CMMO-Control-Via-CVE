@@ -31,7 +31,7 @@ class CMMO:
             print()
         return p
 
-    def home(self, verbose=False, veryVerbose=False, sleepTime=.1):
+    def home(self, verbose=False, veryVerbose=False, sleepTime=.01):
         """
         Home the CMMOs motor
 
@@ -89,7 +89,7 @@ class CMMO:
 
         return s
 
-    def enableControl(self, verbose=False, veryVerbose=False, sleepTime=.1):
+    def enableControl(self, verbose=False, veryVerbose=False, sleepTime=.01):
         """
         enable control of the CMMOs motor
 
@@ -174,7 +174,7 @@ class CMMO:
 
         return s["payload"] / millimeters
 
-    def setPositioningMode(self, sleepTime=.1, verbose=False, veryVerbose=False):
+    def setPositioningMode(self, sleepTime=.01, verbose=False, veryVerbose=False):
         """
         set the CMMO to positioning mode
 
@@ -227,7 +227,7 @@ class CMMO:
 
         return s
 
-    def runRecord(self, sleepTime=.1, verbose=False, veryVerbose=False):
+    def runRecord(self, sleepTime=.01, verbose=False, veryVerbose=False):
         """
         run a record
 
@@ -340,7 +340,27 @@ class CMMO:
 
         return s
 
-    def moveTo(self, millimeters, record=1, sleepTime=.1, verbose=False, veryVerbose=False):
+    def setVelocity(self, velocity, record=1, verbose=False, veryVerbose=False):
+        """
+        set the velocity of the motor in mm per second
+
+        :param velocity: mm per second
+        :return: Dictionary containing important transmission information from reading the current status. See method CVE.parseReadResponse(r) for more details.
+        """
+        s = self.cve.send_receive_write('SINT32', 7, record, velocity * self.conversionRatio, verbose=veryVerbose)
+        if verbose:
+            print("ACK:", s["ACK message"])
+            print()
+        s = self.cve.readStatus(verbose=veryVerbose)
+        if verbose:
+            print("ACK:", s["ACK message"])
+            print("Payload HEX:", s["payload hex"])
+            print("Payload BIN:", formatBin(s["payload bin"]))
+            print()
+
+        return s
+
+    def moveTo(self, millimeters, record=1, sleepTime=.01, verbose=False, veryVerbose=False):
         """
         move to a given location in mm
 
